@@ -90,7 +90,6 @@ product-intel-agent/
 ├── .env                                # 本地機密（不提交 Git）
 ├── .gitignore
 ├── Dockerfile
-├── Makefile
 └── pyproject.toml
 ```
 
@@ -288,25 +287,25 @@ class CompetitorIntelReport(BaseModel):
 
 ### 安裝與啟動
 
-```bash
-# 1. 安裝依賴
+```cmd
+REM 1. 安裝依賴
 uv sync
 
-# 2. 填入環境變數
-cp .env .env.local  # 編輯 .env，填入實際值
+REM 2. 填入環境變數
+copy .env .env.local
+REM 編輯 .env.local，填入實際值
 
-# 3. 啟動開發伺服器（含 hot-reload）
-make dev
-# 等同於：uv run uvicorn agent.fast_api_app:app --reload --port 8080
+REM 3. 啟動開發伺服器（含 hot-reload）
+uv run uvicorn agent.fast_api_app:app --reload --port 8080
 ```
 
 ### 測試 API
 
-```bash
-# 分析單一競品
-curl -X POST http://localhost:8080/analyze -H "Content-Type: application/json" -d '{"competitor": "Notion", "session_id": "test-001"}'
+```cmd
+REM 分析單一競品
+curl -X POST http://localhost:8080/analyze -H "Content-Type: application/json" -d "{\"competitor\": \"Notion\", \"session_id\": \"test-001\"}"
 
-# 健康檢查
+REM 健康檢查
 curl http://localhost:8080/health
 ```
 
@@ -314,9 +313,9 @@ curl http://localhost:8080/health
 
 在 `agent/docs/` 目錄下新增 `.md` 檔案，PM Lead Agent 會自動透過 `list_product_docs()` 發現並讀取：
 
-```bash
-# 範例：新增競品比較文件
-cp agent/docs/my_product_spec.md agent/docs/competitor_comparison.md
+```cmd
+REM 範例：新增競品比較文件
+copy agent\docs\my_product_spec.md agent\docs\competitor_comparison.md
 ```
 
 ---
@@ -325,27 +324,38 @@ cp agent/docs/my_product_spec.md agent/docs/competitor_comparison.md
 
 ### 步驟一：建置並推送 Docker 映像檔
 
-```bash
-# 設定變數
-export PROJECT_ID=your-gcp-project-id
-export REGION=us-central1
+```cmd
+REM 設定變數
+set PROJECT_ID=your-gcp-project-id
+set REGION=us-central1
+set IMAGE_URI=%REGION%-docker.pkg.dev/%PROJECT_ID%/product-intel/product-intel-agent:latest
 
-# 建置映像檔並推送至 Artifact Registry
-make push
+REM 建置映像檔
+docker build -t %IMAGE_URI% .
+
+REM 推送至 Artifact Registry
+docker push %IMAGE_URI%
 ```
 
 ### 步驟二：初始化 Terraform
 
-```bash
-make tf-init
-```
+```cmd
+cd deployment\terraform
+terraform init
+cd ..\..\n```
 
 ### 步驟三：部署基礎設施
 
-```bash
-export SERPER_API_KEY=your-serper-api-key
-make tf-apply
-```
+```cmd
+set SERPER_API_KEY=your-serper-api-key
+
+cd deployment\terraform
+terraform apply ^
+  -var="project_id=%PROJECT_ID%" ^
+  -var="region=%REGION%" ^
+  -var="image_uri=%IMAGE_URI%" ^
+  -var="serper_api_key=%SERPER_API_KEY%"
+cd ..\..\n```
 
 Terraform 完成後會輸出：
 - `cloud_run_url`：Cloud Run 服務 URL
@@ -353,24 +363,23 @@ Terraform 完成後會輸出：
 
 ### 步驟四：設定 Vertex AI 記憶庫（選用）
 
-```bash
-# 在 GCP Console 建立 Memory Bank 後，更新 Cloud Run 環境變數
-gcloud run services update product-intel-agent \
-  --update-env-vars MEMORY_BANK_ID=your-memory-bank-id \
-  --region $REGION
+```cmd
+REM 在 GCP Console 建立 Memory Bank 後，更新 Cloud Run 環境變數
+gcloud run services update product-intel-agent ^
+  --update-env-vars MEMORY_BANK_ID=your-memory-bank-id ^
+  --region %REGION%
 ```
 
-### Makefile 指令速查
+### 常用指令速查
 
-| 指令 | 說明 |
+| 用途 | 指令 |
 |------|------|
-| `make install` | 安裝 Python 依賴 |
-| `make dev` | 啟動本地開發伺服器 |
-| `make build` | 建置 Docker 映像檔 |
-| `make push` | 建置並推送映像檔 |
-| `make deploy` | 完整部署（push + terraform apply） |
-| `make tf-init` | 初始化 Terraform |
-| `make tf-apply` | 僅執行 Terraform apply |
+| 安裝 Python 依賴 | `uv sync` |
+| 啟動本地開發伺服器 | `uv run uvicorn agent.fast_api_app:app --reload --port 8080` |
+| 建置 Docker 映像檔 | `docker build -t %IMAGE_URI% .` |
+| 推送映像檔 | `docker push %IMAGE_URI%` |
+| 初始化 Terraform | `cd deployment\terraform && terraform init` |
+| 部署（Terraform Apply） | `cd deployment\terraform && terraform apply ...` |
 
 ---
 
